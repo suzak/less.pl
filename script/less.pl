@@ -7,6 +7,7 @@ use AnyEvent::Util qw(run_cmd);
 use File::Zglob;
 use Filesys::Notify::Simple;
 use Getopt::Long;
+use List::MoreUtils qw(all);
 use Path::Class qw(file);
 
 my $root = file('dummy')->absolute->parent;
@@ -14,14 +15,16 @@ my $root = file('dummy')->absolute->parent;
 GetOptions(
     '--node=s' => \(my $node = `which node`),
     '--lessc=s' => \(my $lessc = "$root/node_modules/less/bin/lessc"),
-    '--lessdir=s' => \my $lessdir,
-    '--cssdir=s' => \my $cssdir,
-    '--tmpdir=s' => \my $tmpdir,
-    '-I=s' => \my @incdir,
+    '--less-dir=s' => \my $lessdir,
+    '--css-dir=s' => \my $cssdir,
+    '--tmp-dir=s' => \my $tmpdir,
+    '--include-dir=s' => \my @incdir,
+    '--ignore=s' => \my @ignore,
 );
 
 chomp $node;
 $_ = $root->subdir($_) for $lessdir, $cssdir, $tmpdir, @incdir;
+$_ = qr<$_> for @ignore;
 
 # { 'dependent file name' => { 'dependency file name' => 1, ... }, ... }
 my $dependencies = { };
@@ -52,7 +55,7 @@ sub compile ($) {
     my ($less) = @_;
     my ($css, $depsfile) = counterparts $less;
     $depsfile->parent->mkpath;
-    if ($less =~ qr<^$lessdir/>) {
+    if ($less =~ qr<^$lessdir/> && all { $less !~ $_ } @ignore) {
         my @depsfile_times;
         if (-e $depsfile) {
             @depsfile_times = (stat $depsfile)[8, 9]; # 8 = atime, 9 = mtime

@@ -1,0 +1,7 @@
+AnyEvent
+AnyEvent::Util
+File::Zglob
+Filesys::Notify::Simple
+Getopt::Long
+List::MoreUtils
+Path::Class
