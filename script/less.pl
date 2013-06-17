@@ -17,13 +17,14 @@ GetOptions(
     '--lessc=s' => \(my $lessc = "$root/node_modules/less/bin/lessc"),
     '--less-dir=s' => \my $lessdir,
     '--css-dir=s' => \my $cssdir,
+    '--css-dir-with-debuginfo=s' => \my $cssdir_with_debuginfo,
     '--tmp-dir=s' => \my $tmpdir,
     '--include-dir=s' => \my @incdir,
     '--ignore=s' => \my @ignore,
 );
 
 chomp $node;
-$_ = $root->subdir($_) for $lessdir, $cssdir, $tmpdir, @incdir;
+$_ = $root->subdir($_) for $lessdir, $cssdir, $cssdir_with_debuginfo, $tmpdir, @incdir;
 $_ = qr<$_> for @ignore;
 
 # { 'dependent file name' => { 'dependency file name' => 1, ... }, ... }
@@ -50,6 +51,17 @@ sub counterparts ($) {
     return ($css, $depsfile);
 }
 
+sub css_with_debuginfo_filename ($) {
+    my ($less) = @_;
+    if ($cssdir_with_debuginfo) {
+        (my $css = $less) =~ s!^$lessdir/!!;
+        $css =~ s/\.less$/.css/;
+        $css = $cssdir_with_debuginfo->file($css);
+        return $css;
+    }
+    return;
+}
+
 sub compile ($);
 sub compile ($) {
     my ($less) = @_;
@@ -68,11 +80,21 @@ sub compile ($) {
             if (!$_[0]->recv) {
                 print "$less: compiled\n";
                 chmod 0444, $css; # octal
+                my $cv = AnyEvent->condvar;
+                $cv->begin(sub { $cv1->send });
+                $cv->begin;
                 run_cmd([$node, $lessc, '-depends', (map "-I$_", @incdir), $less, $css],
                         '>' => $depsfile->open('w'))->cb(sub {
                     read_depsfile $depsfile;
-                    $cv1->send;
+                    $cv->end;
                 });
+                if (my $debuginfo = css_with_debuginfo_filename $less) {
+                    $cv->begin;
+                    run_cmd([$node, $lessc, '--line-numbers=mediaquery', (map "-I$_", @incdir), $less, $debuginfo])->cb(sub {
+                        $cv->end;
+                    });
+                }
+                $cv->end;
             } else {
                 if (-e $depsfile) {
                     if (@depsfile_times) {
