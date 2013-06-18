@@ -24,7 +24,8 @@ GetOptions(
 );
 
 chomp $node;
-$_ = $root->subdir($_) for $lessdir, $cssdir, $cssdir_with_debuginfo, $tmpdir, @incdir;
+$_ = $root->subdir($_)
+    for grep defined, $lessdir, $cssdir, $cssdir_with_debuginfo, $tmpdir, @incdir;
 $_ = qr<$_> for @ignore;
 
 # { 'dependent file name' => { 'dependency file name' => 1, ... }, ... }
